@@ -1,3 +1,6 @@
+"""
+Borrowed from: https://github.com/maciejkula/triplet_recommendations_keras
+"""
 import itertools
 import numpy as np
 import zipfile
@@ -115,6 +118,40 @@ def get_dense_triplets(uids, pids, nids, num_users, num_items):
 def get_triplets(mat):
 
     return mat.row, mat.col, np.random.randint(mat.shape[1], size=len(mat.row))
+
+
+def generate_triplets(mat):
+    rows, cols, nums = get_triplets(mat)
+    while True:
+        uid_batch = []
+        pid_batch = []
+        nid_batch = []
+        for uid, pid, nid in zip(rows, cols, nums):
+            uid_batch.append(uid)
+            pid_batch.append(pid)
+            nid_batch.append(nid)
+            if len(uid_batch) >= 5000:
+                x_to_yield = {
+                    'query_input': np.array(uid_batch).reshape(-1, 1),
+                    'positive_input': np.array(pid_batch).reshape(-1, 1),
+                    'negative_input': np.array(nid_batch).reshape(-1, 1)
+                }
+                uid_batch = []
+                pid_batch = []
+                nid_batch = []
+                yield (
+                    x_to_yield,
+                    np.ones(shape=(len(x_to_yield['query_input']), 1))
+                )
+        x_to_yield = {
+            'query_input': np.array(uid_batch).reshape(-1, 1),
+            'positive_input': np.array(pid_batch).reshape(-1, 1),
+            'negative_input': np.array(nid_batch).reshape(-1, 1)
+        }
+        yield (
+            x_to_yield,
+            np.ones(shape=(len(x_to_yield['query_input']), 1))
+        )
 
 
 def get_movielens_data():

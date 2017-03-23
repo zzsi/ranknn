@@ -9,6 +9,7 @@ from keras.models import Model
 from keras.layers import Embedding, Flatten, Input, merge
 from keras.optimizers import Adam
 from .. import metrics
+from ..data import movielens
 
 
 def identity_loss(y_true, y_pred):
@@ -30,14 +31,14 @@ def bpr_triplet_loss(X):
 
 def build_model(num_users, num_items, latent_dim):
 
-    positive_item_input = Input((1, ), name='positive_item_input')
-    negative_item_input = Input((1, ), name='negative_item_input')
+    positive_item_input = Input((1, ), name='positive_input')
+    negative_item_input = Input((1, ), name='negative_input')
 
     # Shared embedding layer for positive and negative items
     item_embedding_layer = Embedding(
         num_items, latent_dim, name='item_embedding', input_length=1)
 
-    user_input = Input((1, ), name='user_input')
+    user_input = Input((1, ), name='query_input')
 
     positive_item_embedding = Flatten()(item_embedding_layer(
         positive_item_input))
@@ -84,24 +85,15 @@ class SimpleRecommender(object):
         # Sanity check, should be around 0.5
         print('AUC before training %s' % metrics.full_auc(model, test))
 
+
         for epoch in range(self.__n_epochs):
 
             print('Epoch %s' % epoch)
 
-            # Sample triplets from the training data
-            uid, pid, nid = loader.get_triplets(train)
-
-            X = {
-                'user_input': uid,
-                'positive_item_input': pid,
-                'negative_item_input': nid
-            }
-
-            model.fit(X,
-                      np.ones(len(uid)),
-                      batch_size=64,
-                      nb_epoch=1,
-                      verbose=0,
-                      shuffle=True)
+            model.fit_generator(
+                movielens.generate_triplets(train),
+                epochs=1,
+                steps_per_epoch=200,
+            )
 
             print('AUC %s' % metrics.full_auc(model, test))
