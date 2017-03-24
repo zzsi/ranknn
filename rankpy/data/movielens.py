@@ -5,7 +5,7 @@ import itertools
 import numpy as np
 import zipfile
 import scipy.sparse as sp
-from utils import download_file, get_data_path
+from utils import download_file, get_data_absolute_path
 
 
 def get_files():
@@ -19,7 +19,13 @@ def get_files():
 
 def _get_raw_movielens_data(name='main'):
     files = get_files()
-    local_path = get_data_path(files[name]['local_path'])
+    local_path = get_data_absolute_path(files[name]['local_path'])
+    for _, metadata in files.items():
+        download_file(
+            url=metadata.get('url'),
+            dest_path=get_data_absolute_path(metadata.get('local_path')),
+            overwrite=False
+        )
     with zipfile.ZipFile(local_path) as datafile:
         return (datafile.read('ml-100k/ua.base').decode().split('\n'),
                 datafile.read('ml-100k/ua.test').decode().split('\n'))
@@ -59,7 +65,7 @@ def _get_movie_raw_metadata():
 
     _get_raw_movielens_data()
     files = get_files()
-    local_path = get_data_path(files['main']['local_path'])
+    local_path = get_data_absolute_path(files['main']['local_path'])
 
     with zipfile.ZipFile(local_path) as datafile:
         return datafile.read('ml-100k/u.item').decode(errors='ignore').split('\n')

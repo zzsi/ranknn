@@ -1,5 +1,5 @@
 import gzip
-from utils import download_file, get_data_path
+from utils import download_file, get_data_absolute_path
 
 
 def get_files():
@@ -21,7 +21,7 @@ def get_files():
 
 def data_generator(name):
     files = get_files()
-    local_path = get_data_path(files[name]['local_path'])
+    local_path = get_data_absolute_path(files[name]['local_path'])
     download_file(url=files['name']['url'], dest_path=local_path)
     with gzip.open(local_path) as in_file:
         for line in in_file:

@@ -2,10 +2,25 @@
 from __future__ import absolute_import
 from __future__ import print_function
 import requests
+import errno
+import os
 from os import path
 
 
-CWD = path.dirname(path.abspath(__file__))
+DATA_ROOT = '%s/data/rankpy' % path.expanduser('~')
+
+
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+
+mkdir_p(DATA_ROOT)
 
 
 def download_file(url, dest_path, overwrite=False):
@@ -13,12 +28,15 @@ def download_file(url, dest_path, overwrite=False):
         return
     req = requests.get(url, stream=True)
 
-    print('Downloading MovieLens data')
+    print('Downloading data file: %s' % dest_path)
 
+    mkdir_p(path.dirname(dest_path))
+
+    # TODO: display download progress.
     with open(dest_path, 'wb') as outfile:
         for chunk in req.iter_content():
             outfile.write(chunk)
 
 
-def get_data_path(relative_path):
-    return path.join(CWD, '../../data', relative_path)
+def get_data_absolute_path(relative_path):
+    return path.join(DATA_ROOT, relative_path)
