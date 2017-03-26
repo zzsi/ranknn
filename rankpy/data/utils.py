@@ -5,6 +5,7 @@ import requests
 import errno
 import os
 from os import path
+from tqdm import tqdm
 
 
 DATA_ROOT = '%s/data/rankpy' % path.expanduser('~')
@@ -26,16 +27,20 @@ mkdir_p(DATA_ROOT)
 def download_file(url, dest_path, overwrite=False):
     if not overwrite and path.isfile(dest_path):
         return
-    req = requests.get(url, stream=True)
+    res = requests.get(url, stream=True)
 
     print('Downloading data file: %s' % dest_path)
 
     mkdir_p(path.dirname(dest_path))
 
     # TODO: display download progress.
-    with open(dest_path, 'wb') as outfile:
-        for chunk in req.iter_content():
-            outfile.write(chunk)
+    content_length = int(res.headers.get('content-length', 1))
+    chunk_size = 1024
+    with tqdm(total=content_length, unit='B', unit_scale=True) as pbar:
+        with open(dest_path, 'wb') as outfile:
+            for chunk in res.iter_content(chunk_size=chunk_size):
+                outfile.write(chunk)
+                pbar.update(len(chunk))
 
 
 def get_data_absolute_path(relative_path):

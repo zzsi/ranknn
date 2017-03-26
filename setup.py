@@ -8,4 +8,9 @@ setup(name='rankpy',
       author_email='',
       license='MIT',
       packages=['rankpy'],
+      install_requires=[
+      	'tensorflow>=1',
+      	'keras>=2',
+      	'tqdm'
+      ],
       zip_safe=False)
