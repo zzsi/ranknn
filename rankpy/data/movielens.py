@@ -126,7 +126,23 @@ def get_triplets(mat):
     return mat.row, mat.col, np.random.randint(mat.shape[1], size=len(mat.row))
 
 
-def generate_triplets(mat):
+def train_matrix_shape():
+    train, _ = get_movielens_data()
+    return train.shape
+
+
+def test_matrix():
+    return get_movielens_data()[1]
+
+
+def triplet_batches(mode='train'):
+    train, test = get_movielens_data()
+    if mode == 'train':
+        mat = train
+    elif mode == 'test':
+        mat = test
+    else:
+        raise ValueError('invalid mode: %s', mode)
     rows, cols, nums = get_triplets(mat)
     while True:
         uid_batch = []

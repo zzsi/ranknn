@@ -84,11 +84,8 @@ class CollaborativeFilteringModel(object):
     def fit(self, loader):
 
         # Read data
-        train, test = loader.get_movielens_data()
-        num_users, num_items = train.shape
-
-        # Prepare the test triplets
-        test_uid, test_pid, test_nid = loader.get_triplets(test)
+        num_users, num_items = loader.train_matrix_shape()
+        test = loader.test_matrix()
 
         model = build_model(num_users, num_items, self.__latent_dim)
 
@@ -104,7 +101,7 @@ class CollaborativeFilteringModel(object):
             print('Epoch %s' % epoch)
 
             model.fit_generator(
-                movielens.generate_triplets(train),
+                movielens.triplet_batches(mode='train'),
                 epochs=1,
                 steps_per_epoch=200,
             )
