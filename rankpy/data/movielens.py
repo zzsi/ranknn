@@ -135,7 +135,7 @@ def test_matrix():
     return get_movielens_data()[1]
 
 
-def triplet_batches(mode='train'):
+def triplet_batches(mode='train', batch_size=5000):
     train, test = get_movielens_data()
     if mode == 'train':
         mat = train
@@ -152,7 +152,7 @@ def triplet_batches(mode='train'):
             uid_batch.append(uid)
             pid_batch.append(pid)
             nid_batch.append(nid)
-            if len(uid_batch) >= 5000:
+            if len(uid_batch) >= batch_size:
                 x_to_yield = {
                     'query_input': np.array(uid_batch).reshape(-1, 1),
                     'positive_input': np.array(pid_batch).reshape(-1, 1),
@@ -178,7 +178,7 @@ def triplet_batches(mode='train'):
 
 def get_movielens_data():
     """
-    Return (train_interactions, test_interactions).
+    Return (train_interactions, test_interactions) as two sparse matrices.
     """
 
     train_data, test_data = _get_raw_movielens_data()
