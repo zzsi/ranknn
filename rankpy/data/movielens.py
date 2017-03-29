@@ -161,15 +161,19 @@ def train_matrix_shape():
     return train.shape
 
 
-def test_matrix():
-    return get_movielens_data()[1]
+def test_matrix(include_user_side_info=False, include_item_side_info=False):
+    mat_cf = get_movielens_data()[1]  # matrix[uid, iid]
+    user_side_info = get_user_side_info()
+    item_side_info = get_item_side_info()
+    raise NotImplementedError
 
 
 def triplet_batches_hybrid():
     pass
 
 
-def triplet_batches(mode='train', batch_size=100):
+def triplet_batches(mode='train', batch_size=100, include_user_side_info=False,
+                    include_item_side_info=False):
     train, test = get_movielens_data()
     if mode == 'train':
         mat = train
@@ -178,6 +182,26 @@ def triplet_batches(mode='train', batch_size=100):
     else:
         raise ValueError('invalid mode: %s', mode)
     rows, cols, nums = get_triplets(mat)
+    user_side_info = get_user_side_info()
+    item_side_info = get_item_side_info()
+
+    def produce_x_from_batch(uid_batch, pid_batch, nid_batch):
+        # Always include the cf part.
+        x_to_yield = {
+            'user_id': np.array(uid_batch).reshape(-1, 1),
+            'positive_item_id': np.array(pid_batch).reshape(-1, 1),
+            'negative_item_id': np.array(nid_batch).reshape(-1, 1)
+        }
+        if include_user_side_info:
+            user_content_vecs = np.array([user_side_info[uid] for uid in uid_batch])
+            x_to_yield['user_content'] = user_content_vecs
+        if include_item_side_info:
+            pos_item_content_vecs = np.array([item_side_info[pid] for pid in pid_batch])
+            x_to_yield['positive_item_content'] = pos_item_content_vecs
+            neg_item_content_vecs = np.array([item_side_info[nid] for nid in nid_batch])
+            x_to_yield['negative_item_content'] = neg_item_content_vecs
+        return x_to_yield
+
     while True:
         uid_batch = []
         pid_batch = []
@@ -187,11 +211,7 @@ def triplet_batches(mode='train', batch_size=100):
             pid_batch.append(pid)
             nid_batch.append(nid)
             if len(uid_batch) >= batch_size:
-                x_to_yield = {
-                    'user_id': np.array(uid_batch).reshape(-1, 1),
-                    'positive_item_id': np.array(pid_batch).reshape(-1, 1),
-                    'negative_item_id': np.array(nid_batch).reshape(-1, 1)
-                }
+                x_to_yield = produce_x_from_batch(uid_batch, pid_batch, nid_batch)
                 uid_batch = []
                 pid_batch = []
                 nid_batch = []
@@ -200,11 +220,7 @@ def triplet_batches(mode='train', batch_size=100):
                     np.ones(shape=(len(x_to_yield['user_id']), 1))
                 )
         if len(uid_batch) > 0:
-            x_to_yield = {
-                'user_id': np.array(uid_batch).reshape(-1, 1),
-                'positive_item_id': np.array(pid_batch).reshape(-1, 1),
-                'negative_item_id': np.array(nid_batch).reshape(-1, 1)
-            }
+            x_to_yield = produce_x_from_batch(uid_batch, pid_batch, nid_batch)
             yield (
                 x_to_yield,
                 np.ones(shape=(len(x_to_yield['user_id']), 1))

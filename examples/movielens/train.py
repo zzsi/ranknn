@@ -1,6 +1,7 @@
-from rankpy.models import CollaborativeFilteringModel
+from rankpy.models import CollaborativeFilteringModel, HybridRecommenderModel
 from rankpy.data import movielens
 
 
-model = CollaborativeFilteringModel(latent_dim=100, n_epochs=10)
-model.fit(movielens)
+CollaborativeFilteringModel(latent_dim=100, n_epochs=10).fit_module(movielens)
+# HybridRecommenderModel().fit_module(movielens)
+

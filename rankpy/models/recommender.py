@@ -10,6 +10,7 @@ from keras.layers import Embedding, Flatten, Input, Dense, merge, concatenate
 from keras.optimizers import Adam
 from keras.constraints import unit_norm
 from .. import metrics
+from sklearn.metrics import roc_curve, auc
 
 
 def identity_loss(y_true, y_pred):
@@ -84,12 +85,12 @@ def build_hybrid_model(num_users, num_items, user_content_dim, item_content_dim,
 
 def build_hybrid_model_simple(num_users, num_items, user_content_dim, item_content_dim, latent_dim_cf, latent_dim_hybrid):
     # Inputs.
-    user_id_input = Input((1, ), name='user_id_input')
-    user_content_input = Input((user_content_dim, ), name='user_content_input')
-    pos_item_id_input = Input((1, ), name='positive_item_id_input')
-    pos_item_content_input = Input((item_content_dim, ), name='positive_item_content_input')
-    neg_item_id_input = Input((1, ), name='negative_item_id_input')
-    neg_item_content_input = Input((item_content_dim, ), name='negative_item_content_input')
+    user_id_input = Input((1, ), name='user_id')
+    user_content_input = Input((user_content_dim, ), name='user_content')
+    pos_item_id_input = Input((1, ), name='positive_item_id')
+    pos_item_content_input = Input((item_content_dim, ), name='positive_item_content')
+    neg_item_id_input = Input((1, ), name='negative_item_id')
+    neg_item_content_input = Input((item_content_dim, ), name='negative_item_content')
 
     user_cf_embedding_model = Sequential()
     user_cf_embedding_model.add(Embedding(num_users, latent_dim_cf, name='user_embedding', input_length=1))
@@ -139,11 +140,14 @@ class CollaborativeFilteringModel(object):
         self.__latent_dim = latent_dim
         self.__n_epochs = n_epochs
 
-    def fit(self, data_module):
+    def fit_module(self, data_module):
 
         # Read data
         num_users, num_items = data_module.train_matrix_shape()
-        test_matrix = data_module.test_matrix()
+        # test_matrix = data_module.test_matrix()
+        test_batch_x, test_batch_y = data_module.triplet_batches(
+            mode='test', batch_size=2000
+        ).next()
 
         model = build_cf_model(num_users, num_items, self.__latent_dim)
 
@@ -151,7 +155,7 @@ class CollaborativeFilteringModel(object):
         print(model.summary())
 
         # Sanity check, should be around 0.5
-        print('AUC before training %s' % metrics.full_auc(model, test_matrix))
+        # print('AUC before training %s' % metrics.full_auc(model, test_matrix))
 
         for epoch in range(self.__n_epochs):
 
@@ -163,12 +167,60 @@ class CollaborativeFilteringModel(object):
                 steps_per_epoch=200
             )
 
-            print('AUC %s' % metrics.full_auc(model, test_matrix))
+            eval_out = model.predict_on_batch(test_batch_x)
+            print(1. - np.mean(eval_out > 0.5))
+            # print('AUC %s' % metrics.full_auc(model, test_matrix))
 
 
 class HybridRecommenderModel(object):
     """Collaborative filtering and content-based filtering (aka side information).
     """
 
-    def __init__(self, latent_dim=100, n_epochs=10):
-        pass
+    def __init__(self, latent_dim_cf=100, latent_dim_hybrid=100, n_epochs=10):
+        self.__n_epochs = n_epochs
+        self.__latent_dim_cf = latent_dim_cf
+        self.__latent_dim_hybrid = latent_dim_hybrid
+
+    def fit_module(self, data_module):
+
+        num_users, num_items = data_module.train_matrix_shape()
+        user_side_info = data_module.get_user_side_info()
+        item_side_info = data_module.get_item_side_info()
+        user_content_dim = len(user_side_info.values()[0])
+        item_content_dim = len(item_side_info.values()[0])
+        # test_matrix = data_module.test_matrix(
+        #     include_user_side_info=True,
+        #     include_item_side_info=True
+        # )
+        test_batch = data_module.triplet_batches(
+            mode='test', batch_size=10000,
+            include_user_side_info=True,
+            include_item_side_info=True
+        ).next()
+
+        model = build_hybrid_model_simple(
+            num_users, num_items, user_content_dim, item_content_dim,
+            latent_dim_cf=self.__latent_dim_cf,
+            latent_dim_hybrid=self.__latent_dim_hybrid)
+
+        print('AUC before training %s' % metrics.full_auc(model, test_matrix))
+
+        for epoch in range(self.__n_epochs):
+
+            print('Epoch %s' % epoch)
+
+            model.fit_generator(
+                data_module.triplet_batches(
+                    mode='train', batch_size=5000,
+                    include_user_side_info=True,
+                    include_item_side_info=True,
+                ),
+                epochs=1,
+                steps_per_epoch=200
+            )
+
+            eval_out = model.predict_on_batch(test_batch)
+            print(type(eval_out))
+
+            print('AUC %s' % metrics.full_auc(model, test_matrix))
+
