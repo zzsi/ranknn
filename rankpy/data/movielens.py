@@ -71,46 +71,75 @@ def _get_movie_raw_metadata():
         return datafile.read('ml-100k/u.item').decode(errors='ignore').split('\n')
 
 
-def get_movielens_item_metadata(use_item_ids):
-    """
-    Build a matrix of genre features (no_items, no_features).
-
-    If use_item_ids is True, per-item feeatures will also be used.
-    """
-
-    features = {}
-    genre_set = set()
-
+def get_item_side_info():
+    item_side_info = {}
     for line in _get_movie_raw_metadata():
-
         if not line:
             continue
+        fields = line.split('|')
+        item_id = int(fields[0])
+        genres_vec = [int(val) for val in fields[5:]]
+        item_side_info[item_id] = genres_vec
+    return item_side_info
 
-        splt = line.split('|')
-        item_id = int(splt[0])
 
-        genres = [idx for idx, val in
-                  zip(range(len(splt[5:])), splt[5:])
-                  if int(val) > 0]
+def get_occupations():
+    files = get_files()
+    local_path = get_data_absolute_path(files['main']['local_path'])
+    with zipfile.ZipFile(local_path) as datafile:
+        return datafile.read('ml-100k/u.occupation').decode(errors='ignore').split('\n')
 
-        if use_item_ids:
-            # Add item-specific features too
-            genres.append(item_id)
 
-        for genre_id in genres:
-            genre_set.add(genre_id)
+def _get_user_raw_metadata():
+    files = get_files()
+    local_path = get_data_absolute_path(files['main']['local_path'])
+    with zipfile.ZipFile(local_path) as datafile:
+        return datafile.read('ml-100k/u.user').decode(errors='ignore').split('\n')
 
-        features[item_id] = genres
 
-    mat = sp.lil_matrix((len(features) + 1,
-                         len(genre_set)),
-                        dtype=np.int32)
+def get_user_side_info():
+    """
+    Build a matrix of user features (num_users, num_features).
+    """
+    occupations = dict(
+        [(occ, i) for (i, occ) in enumerate(get_occupations()) if len(occ) > 0]
+    )
 
-    for item_id, genre_ids in features.items():
-        for genre_id in genre_ids:
-            mat[item_id, genre_id] = 1
+    def vectorize_age(age):
+        try:
+            age = max(float(age), 1.)
+        except:
+            age = 1.
+        return [
+            int(age >= 5), int(age >= 10), int(age >= 15), int(age >= 20),
+            int(age >= 30), int(age >= 50)
+        ]
 
-    return mat
+    def vectorize_gender(gender):
+        if gender == 'M':
+            return [0, 0]
+        elif gender == 'F':
+            return [1, 0]
+        else:
+            return [0, 1]
+
+    def vectorize_occupation(occupation):
+        # One-hot encoding.
+        idx = occupations.get(occupation, len(occupations))
+        vec = [0] * (len(occupations) + 1)
+        vec[idx] = 1
+        return vec
+
+    def generate_row(age, gender, occupation):
+        return vectorize_age(age) + vectorize_gender(gender) + vectorize_occupation(occupation)
+
+    user_side_info = {}
+    for line in _get_user_raw_metadata():
+        if not line:
+            continue
+        user_id, age, gender, occupation, zip_code = tuple(line.split('|'))
+        user_side_info[int(user_id)] = generate_row(age, gender, occupation)
+    return user_side_info
 
 
 def get_dense_triplets(uids, pids, nids, num_users, num_items):
@@ -122,7 +151,8 @@ def get_dense_triplets(uids, pids, nids, num_users, num_items):
 
 
 def get_triplets(mat):
-
+    # TODO: replace random negative sampling with importance sampling based on 
+    #   predictions of current model.
     return mat.row, mat.col, np.random.randint(mat.shape[1], size=len(mat.row))
 
 
@@ -135,7 +165,11 @@ def test_matrix():
     return get_movielens_data()[1]
 
 
-def triplet_batches(mode='train', batch_size=5000):
+def triplet_batches_hybrid():
+    pass
+
+
+def triplet_batches(mode='train', batch_size=100):
     train, test = get_movielens_data()
     if mode == 'train':
         mat = train
@@ -154,26 +188,27 @@ def triplet_batches(mode='train', batch_size=5000):
             nid_batch.append(nid)
             if len(uid_batch) >= batch_size:
                 x_to_yield = {
-                    'query_input': np.array(uid_batch).reshape(-1, 1),
-                    'positive_input': np.array(pid_batch).reshape(-1, 1),
-                    'negative_input': np.array(nid_batch).reshape(-1, 1)
+                    'user_id': np.array(uid_batch).reshape(-1, 1),
+                    'positive_item_id': np.array(pid_batch).reshape(-1, 1),
+                    'negative_item_id': np.array(nid_batch).reshape(-1, 1)
                 }
                 uid_batch = []
                 pid_batch = []
                 nid_batch = []
                 yield (
                     x_to_yield,
-                    np.ones(shape=(len(x_to_yield['query_input']), 1))
+                    np.ones(shape=(len(x_to_yield['user_id']), 1))
                 )
-        x_to_yield = {
-            'query_input': np.array(uid_batch).reshape(-1, 1),
-            'positive_input': np.array(pid_batch).reshape(-1, 1),
-            'negative_input': np.array(nid_batch).reshape(-1, 1)
-        }
-        yield (
-            x_to_yield,
-            np.ones(shape=(len(x_to_yield['query_input']), 1))
-        )
+        if len(uid_batch) > 0:
+            x_to_yield = {
+                'user_id': np.array(uid_batch).reshape(-1, 1),
+                'positive_item_id': np.array(pid_batch).reshape(-1, 1),
+                'negative_item_id': np.array(nid_batch).reshape(-1, 1)
+            }
+            yield (
+                x_to_yield,
+                np.ones(shape=(len(x_to_yield['user_id']), 1))
+            )
 
 
 def get_movielens_data():

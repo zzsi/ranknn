@@ -40,8 +40,8 @@ def hinge_triplet_loss(X, alpha=1):
 
 def build_cf_model(num_users, num_items, latent_dim):
 
-    positive_item_input = Input((1, ), name='positive_input')
-    negative_item_input = Input((1, ), name='negative_input')
+    positive_item_input = Input((1, ), name='positive_item_id')
+    negative_item_input = Input((1, ), name='negative_item_id')
 
     # Shared embedding layer for positive and negative items
     # embeddings_constraint=unit_norm() didn't help
@@ -49,7 +49,7 @@ def build_cf_model(num_users, num_items, latent_dim):
     item_embedding_layer = Embedding(
         num_items, latent_dim, name='item_embedding', input_length=1)
 
-    user_input = Input((1, ), name='query_input')
+    user_input = Input((1, ), name='user_id')
 
     positive_item_embedding = Flatten()(item_embedding_layer(
         positive_item_input))
@@ -77,7 +77,12 @@ def build_content_model(user_content_dim, item_content_dim, latent_dim):
     pass
 
 
-def build_hybrid_model(num_users, num_items, user_content_dim, item_content_dim, latent_dim_cf, latent_dim_hybrid):
+def build_hybrid_model(num_users, num_items, user_content_dim, item_content_dim,
+    cf_layer_shapes, content_layer_shapes, hybrid_layer_shapes):
+    pass
+
+
+def build_hybrid_model_simple(num_users, num_items, user_content_dim, item_content_dim, latent_dim_cf, latent_dim_hybrid):
     # Inputs.
     user_id_input = Input((1, ), name='user_id_input')
     user_content_input = Input((user_content_dim, ), name='user_content_input')
@@ -153,9 +158,9 @@ class CollaborativeFilteringModel(object):
             print('Epoch %s' % epoch)
 
             model.fit_generator(
-                data_module.triplet_batches(mode='train'),
+                data_module.triplet_batches(mode='train', batch_size=5000),
                 epochs=1,
-                steps_per_epoch=200,
+                steps_per_epoch=200
             )
 
             print('AUC %s' % metrics.full_auc(model, test_matrix))
