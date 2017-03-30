@@ -11,6 +11,7 @@ setup(name='rankpy',
       install_requires=[
       	'tensorflow>=1',
       	'keras>=2',
-      	'tqdm'
+      	'tqdm',
+            'numpy'
       ],
       zip_safe=False)

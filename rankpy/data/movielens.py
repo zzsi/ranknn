@@ -1,5 +1,5 @@
 """
-Borrowed from: https://github.com/maciejkula/triplet_recommendations_keras
+Adapted from: https://github.com/maciejkula/triplet_recommendations_keras
 """
 
 import itertools
