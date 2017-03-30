@@ -1,12 +1,13 @@
 """
-Borrowed from: https://github.com/maciejkula/triplet_recommendations_keras
+Adapted from: https://github.com/maciejkula/triplet_recommendations_keras
 """
 from __future__ import absolute_import
 
 import numpy as np
+
 from keras import backend as K
 from keras.models import Model, Sequential
-from keras.layers import Embedding, Flatten, Input, Dense, merge, concatenate
+from keras.layers import Embedding, Flatten, Input, Dense, Lambda, merge, concatenate
 from keras.optimizers import Adam
 from keras.constraints import unit_norm
 from .. import metrics
@@ -60,11 +61,9 @@ def build_cf_model(num_users, num_items, latent_dim):
         num_users, latent_dim, name='user_embedding', input_length=1)(
             user_input))
 
-    loss = merge(
-        [positive_item_embedding, negative_item_embedding, user_embedding],
-        mode=bpr_triplet_loss,
-        name='loss',
-        output_shape=(1, ))
+    loss = Lambda(bpr_triplet_loss, output_shape=(1,), name='brp_loss')(
+        [positive_item_embedding, negative_item_embedding, user_embedding]
+    )
 
     model = Model(
         input=[positive_item_input, negative_item_input, user_input],
@@ -102,7 +101,7 @@ def build_hybrid_model_simple(num_users, num_items, user_content_dim, item_conte
 
     def hybrid_model(cf_embedding, content_input):
         return Dense(latent_dim_hybrid)(
-            concatenate(cf_embedding, content_input)
+            concatenate([cf_embedding, content_input])
         )
 
     user_vec = hybrid_model(
@@ -119,15 +118,13 @@ def build_hybrid_model_simple(num_users, num_items, user_content_dim, item_conte
         neg_item_content_input
     )
 
-    loss = merge(
-        [positive_item_vec, negative_item_vec, user_vec],
-        mode=bpr_triplet_loss,
-        name='loss',
-        output_shape=(1, ))
+    loss = Lambda(bpr_triplet_loss, output_shape=(1,), name='brp_loss')(
+        [positive_item_vec, negative_item_vec, user_vec]
+    )
 
     model = Model(
-        input=[user_id_input, user_content_input, pos_item_id_input, neg_item_id_input, pos_item_content_input, neg_item_content_input],
-        output=loss)
+        inputs=[user_id_input, user_content_input, pos_item_id_input, neg_item_id_input, pos_item_content_input, neg_item_content_input],
+        outputs=loss)
     model.compile(loss=identity_loss, optimizer=Adam(lr=0.001))
     return model
 
@@ -140,13 +137,17 @@ class CollaborativeFilteringModel(object):
         self.__latent_dim = latent_dim
         self.__n_epochs = n_epochs
 
-    def fit_module(self, data_module):
+    def fit_dataset(self, dataset):
+        np.random.seed(42)
 
         # Read data
-        num_users, num_items = data_module.train_matrix_shape()
+        num_users = dataset.num_users()
+        num_items = dataset.num_items()
         # test_matrix = data_module.test_matrix()
-        test_batch_x, test_batch_y = data_module.triplet_batches(
-            mode='test', batch_size=2000
+        test_batch_x, test_batch_y = dataset.triplet_batches(
+            mode='test', batch_size=2000,
+            include_user_side_info=False,
+            include_item_side_info=False
         ).next()
 
         model = build_cf_model(num_users, num_items, self.__latent_dim)
@@ -162,13 +163,17 @@ class CollaborativeFilteringModel(object):
             print('Epoch %s' % epoch)
 
             model.fit_generator(
-                data_module.triplet_batches(mode='train', batch_size=5000),
+                dataset.triplet_batches(
+                    mode='train', batch_size=5000,
+                    include_user_side_info=False,
+                    include_item_side_info=False
+                ),
                 epochs=1,
                 steps_per_epoch=200
             )
 
             eval_out = model.predict_on_batch(test_batch_x)
-            print(1. - np.mean(eval_out > 0.5))
+            print('AUC on hold-out test dataset: %.6f' % (1. - np.mean(eval_out > 0.5)))
             # print('AUC %s' % metrics.full_auc(model, test_matrix))
 
 
@@ -181,18 +186,17 @@ class HybridRecommenderModel(object):
         self.__latent_dim_cf = latent_dim_cf
         self.__latent_dim_hybrid = latent_dim_hybrid
 
-    def fit_module(self, data_module):
+    def fit_dataset(self, dataset):
+        np.random.seed(42)
 
-        num_users, num_items = data_module.train_matrix_shape()
-        user_side_info = data_module.get_user_side_info()
-        item_side_info = data_module.get_item_side_info()
+        num_users = dataset.num_users()
+        num_items = dataset.num_items()
+        user_side_info = dataset.get_user_side_info()
+        item_side_info = dataset.get_item_side_info()
         user_content_dim = len(user_side_info.values()[0])
         item_content_dim = len(item_side_info.values()[0])
-        # test_matrix = data_module.test_matrix(
-        #     include_user_side_info=True,
-        #     include_item_side_info=True
-        # )
-        test_batch = data_module.triplet_batches(
+        
+        test_batch_x, test_batch_y = dataset.triplet_batches(
             mode='test', batch_size=10000,
             include_user_side_info=True,
             include_item_side_info=True
@@ -203,14 +207,12 @@ class HybridRecommenderModel(object):
             latent_dim_cf=self.__latent_dim_cf,
             latent_dim_hybrid=self.__latent_dim_hybrid)
 
-        print('AUC before training %s' % metrics.full_auc(model, test_matrix))
-
         for epoch in range(self.__n_epochs):
 
             print('Epoch %s' % epoch)
 
             model.fit_generator(
-                data_module.triplet_batches(
+                dataset.triplet_batches(
                     mode='train', batch_size=5000,
                     include_user_side_info=True,
                     include_item_side_info=True,
@@ -219,8 +221,7 @@ class HybridRecommenderModel(object):
                 steps_per_epoch=200
             )
 
-            eval_out = model.predict_on_batch(test_batch)
-            print(type(eval_out))
-
-            print('AUC %s' % metrics.full_auc(model, test_matrix))
+            eval_out = model.predict_on_batch(test_batch_x)
+            print('AUC on hold-out test dataset: %.6f' % (1. - np.mean(eval_out > 0.5)))
+            print('Loss on hold-out test dataset: %.6f' % np.mean(eval_out))
 

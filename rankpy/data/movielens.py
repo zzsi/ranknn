@@ -1,11 +1,88 @@
 """
 Borrowed from: https://github.com/maciejkula/triplet_recommendations_keras
 """
+
 import itertools
 import numpy as np
 import zipfile
 import scipy.sparse as sp
 from utils import download_file, get_data_absolute_path
+from dataset import BaseDataset
+
+
+class MovieLensDataset(BaseDataset):
+
+    def __init__(self):
+        self.__train, self.__test = get_movielens_data()
+
+    def num_users(self):
+        return self.__train.shape[0]
+
+    def num_items(self):
+        return self.__train.shape[1]
+
+    def get_user_side_info(self):
+        return get_user_side_info()
+
+    def get_item_side_info(self):
+        return get_item_side_info()
+
+    def triplet_batches(self, mode='train', batch_size=100,
+        include_user_side_info=False,
+        include_item_side_info=False):
+        train, test = get_movielens_data()
+        if mode == 'train':
+            mat = train
+        elif mode == 'test':
+            mat = test
+        else:
+            raise ValueError('invalid mode: %s', mode)
+        rows, cols, nums = get_triplets(mat)
+        user_side_info = get_user_side_info()
+        item_side_info = get_item_side_info()
+
+        def produce_x_from_batch(uid_batch, pid_batch, nid_batch):
+            # Always include the cf part.
+            x_to_yield = {
+                'user_id': np.array(uid_batch).reshape(-1, 1),
+                'positive_item_id': np.array(pid_batch).reshape(-1, 1),
+                'negative_item_id': np.array(nid_batch).reshape(-1, 1)
+            }
+            if include_user_side_info:
+                user_content_vecs = np.array([user_side_info[uid] for uid in uid_batch])
+                x_to_yield['user_content'] = user_content_vecs
+            if include_item_side_info:
+                pos_item_content_vecs = np.array([item_side_info[pid] for pid in pid_batch])
+                x_to_yield['positive_item_content'] = pos_item_content_vecs
+                neg_item_content_vecs = np.array([item_side_info[nid] for nid in nid_batch])
+                x_to_yield['negative_item_content'] = neg_item_content_vecs
+            return x_to_yield
+
+        while True:
+            uid_batch = []
+            pid_batch = []
+            nid_batch = []
+            for uid, pid, nid in zip(rows, cols, nums):
+                uid_batch.append(uid)
+                pid_batch.append(pid)
+                nid_batch.append(nid)
+                if len(uid_batch) >= batch_size:
+                    x_to_yield = produce_x_from_batch(uid_batch, pid_batch, nid_batch)
+                    uid_batch = []
+                    pid_batch = []
+                    nid_batch = []
+                    yield (
+                        x_to_yield,
+                        np.ones(shape=(len(x_to_yield['user_id']), 1))
+                    )
+            if len(uid_batch) > 0:
+                x_to_yield = produce_x_from_batch(uid_batch, pid_batch, nid_batch)
+                yield (
+                    x_to_yield,
+                    np.ones(shape=(len(x_to_yield['user_id']), 1))
+                )
+
+
 
 
 def get_files():
@@ -153,7 +230,15 @@ def get_dense_triplets(uids, pids, nids, num_users, num_items):
 def get_triplets(mat):
     # TODO: replace random negative sampling with importance sampling based on 
     #   predictions of current model.
-    return mat.row, mat.col, np.random.randint(mat.shape[1], size=len(mat.row))
+    np.random.seed(42)
+    item_side_info = get_item_side_info()
+    all_item_ids = set([int(x) for x in item_side_info.keys()])
+    # item_ids_in_this_mat = set(mat.col.tolist())
+    # # Make sure item_id has associated side info. This should be guaranteed on MovieLens dataset.
+    # item_ids_to_sample_from = [iid for iid in item_ids_in_this_mat if iid in all_item_ids]
+    # return mat.row, mat.col, np.random.choice(item_ids_to_sample_from, size=len(mat.row))
+    return mat.row, mat.col, np.random.choice(range(1, mat.shape[1]), size=len(mat.row))
+
 
 
 def train_matrix_shape():
@@ -166,65 +251,6 @@ def test_matrix(include_user_side_info=False, include_item_side_info=False):
     user_side_info = get_user_side_info()
     item_side_info = get_item_side_info()
     raise NotImplementedError
-
-
-def triplet_batches_hybrid():
-    pass
-
-
-def triplet_batches(mode='train', batch_size=100, include_user_side_info=False,
-                    include_item_side_info=False):
-    train, test = get_movielens_data()
-    if mode == 'train':
-        mat = train
-    elif mode == 'test':
-        mat = test
-    else:
-        raise ValueError('invalid mode: %s', mode)
-    rows, cols, nums = get_triplets(mat)
-    user_side_info = get_user_side_info()
-    item_side_info = get_item_side_info()
-
-    def produce_x_from_batch(uid_batch, pid_batch, nid_batch):
-        # Always include the cf part.
-        x_to_yield = {
-            'user_id': np.array(uid_batch).reshape(-1, 1),
-            'positive_item_id': np.array(pid_batch).reshape(-1, 1),
-            'negative_item_id': np.array(nid_batch).reshape(-1, 1)
-        }
-        if include_user_side_info:
-            user_content_vecs = np.array([user_side_info[uid] for uid in uid_batch])
-            x_to_yield['user_content'] = user_content_vecs
-        if include_item_side_info:
-            pos_item_content_vecs = np.array([item_side_info[pid] for pid in pid_batch])
-            x_to_yield['positive_item_content'] = pos_item_content_vecs
-            neg_item_content_vecs = np.array([item_side_info[nid] for nid in nid_batch])
-            x_to_yield['negative_item_content'] = neg_item_content_vecs
-        return x_to_yield
-
-    while True:
-        uid_batch = []
-        pid_batch = []
-        nid_batch = []
-        for uid, pid, nid in zip(rows, cols, nums):
-            uid_batch.append(uid)
-            pid_batch.append(pid)
-            nid_batch.append(nid)
-            if len(uid_batch) >= batch_size:
-                x_to_yield = produce_x_from_batch(uid_batch, pid_batch, nid_batch)
-                uid_batch = []
-                pid_batch = []
-                nid_batch = []
-                yield (
-                    x_to_yield,
-                    np.ones(shape=(len(x_to_yield['user_id']), 1))
-                )
-        if len(uid_batch) > 0:
-            x_to_yield = produce_x_from_batch(uid_batch, pid_batch, nid_batch)
-            yield (
-                x_to_yield,
-                np.ones(shape=(len(x_to_yield['user_id']), 1))
-            )
 
 
 def get_movielens_data():
