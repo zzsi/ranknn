@@ -12,6 +12,7 @@ setup(name='rankpy',
       	'tensorflow>=1',
       	'keras>=2',
       	'tqdm',
-            'numpy'
+        'numpy>=1.12',
+        'scikit-learn>=0.18'
       ],
       zip_safe=False)
