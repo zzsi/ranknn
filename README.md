@@ -13,8 +13,18 @@ This library curates training algorithms from open source projects and recent ac
 
 ## Install
 
+
 ```
-(sudo) pip install git+https://https://github.wvrgroup.internal/zsi/rankpy.git
+git clone https://github.wvrgroup.internal/zsi/rankpy.git
+cd rankpy
+pip install -e .
+```
+
+or
+
+(this does not work yet)
+```
+pip install git+ssh://git@github.wvrgroup.internal/zsi/rankpy.git
 ```
 
 ## Quickstart
@@ -99,7 +109,7 @@ Triplets can be generated in a very similar way as from a ratings matrix, in a r
 
 The dataset has N images, each tagged with a numeric rating. Triplets from this dataset is a special case of triplets, where there is no query (or user). A generated triplet is simply (null, positive_image_vector, negative_image_vector).
 
-
+^
 ## Losses
 
 ### Elementwise MSE loss
