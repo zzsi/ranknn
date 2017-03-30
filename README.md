@@ -22,10 +22,11 @@ pip install -e .
 
 or
 
-(this does not work yet)
 ```
 pip install git+ssh://git@github.wvrgroup.internal/zsi/rankpy.git
 ```
+(You need to follow the FAQ section of [data science env wiki](https://wiki.homeawaycorp.com/display/Hostingopps/DataScience+Analysis+Environment), to set up ssh access to internal github.)
+
 
 ## Quickstart
 
