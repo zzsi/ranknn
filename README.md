@@ -25,7 +25,7 @@ or
 ```
 pip install git+ssh://git@github.wvrgroup.internal/zsi/rankpy.git
 ```
-(You need to follow the FAQ section of [data science env wiki](https://wiki.homeawaycorp.com/display/Hostingopps/DataScience+Analysis+Environment), to set up ssh access to internal github.)
+(To install on data science env, you need to follow the FAQ section of [data science env wiki](https://wiki.homeawaycorp.com/display/Hostingopps/DataScience+Analysis+Environment), to set up ssh access to internal github.)
 
 
 ## Quickstart
