@@ -225,3 +225,28 @@ class HybridRecommenderModel(object):
             print('AUC on hold-out test dataset: %.6f' % (1. - np.mean(eval_out > 0.5)))
             print('Loss on hold-out test dataset: %.6f' % np.mean(eval_out))
 
+
+class StaticRecommenderModel(object):
+    """A general framework for hybrid collaborative filtering and content-based filteirng.
+    """
+    def __init__(self, user_model, item_model, similarity_model='dot', loss='pairwise'):
+        pass
+
+    def fit(self, X, y, qids):
+        pass
+
+    def partial_fit(self, X, y, qids):
+        pass
+
+    def fit_triplets(self, triplets):
+        pass
+
+    def fit_triplet_batches(self, triplet_batches, max_num_batches=1e+10):
+        """triplet_batches can be a generator that terminates after a finite amount of yields"""
+        pass
+
+    def predict(self, X):
+        pass
+
+    def predit_triplets(self, triplets):
+        pass
