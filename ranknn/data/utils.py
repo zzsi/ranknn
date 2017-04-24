@@ -8,7 +8,7 @@ from os import path
 from tqdm import tqdm
 
 
-DATA_ROOT = '%s/data/rankpy' % path.expanduser('~')
+DATA_ROOT = '%s/data/ranknn' % path.expanduser('~')
 
 
 def mkdir_p(path):

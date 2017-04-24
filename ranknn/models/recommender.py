@@ -66,8 +66,8 @@ def build_cf_model(num_users, num_items, latent_dim):
     )
 
     model = Model(
-        input=[positive_item_input, negative_item_input, user_input],
-        output=loss)
+        inputs=[positive_item_input, negative_item_input, user_input],
+        outputs=loss)
     model.compile(loss=identity_loss, optimizer=Adam(lr=0.001))
 
     return model
@@ -133,9 +133,10 @@ class CollaborativeFilteringModel(object):
     # Cost function: triplet loss for learning to rank.
     # TODO: also implement an element-wise collaborative filtering model (auto-encoder).
 
-    def __init__(self, latent_dim=100, n_epochs=10):
+    def __init__(self, latent_dim=100, n_epochs=10, steps_per_epoch=200):
         self.__latent_dim = latent_dim
         self.__n_epochs = n_epochs
+        self.__steps_per_epoch = steps_per_epoch
 
     def fit_dataset(self, dataset):
         np.random.seed(42)
@@ -160,7 +161,7 @@ class CollaborativeFilteringModel(object):
 
         for epoch in range(self.__n_epochs):
 
-            print('Epoch %s' % epoch)
+            print('*** Epoch (output loop) %s' % epoch)
 
             model.fit_generator(
                 dataset.triplet_batches(
@@ -169,7 +170,7 @@ class CollaborativeFilteringModel(object):
                     include_item_side_info=False
                 ),
                 epochs=1,
-                steps_per_epoch=200
+                steps_per_epoch=self.__steps_per_epoch
             )
 
             eval_out = model.predict_on_batch(test_batch_x)
@@ -181,10 +182,11 @@ class HybridRecommenderModel(object):
     """Collaborative filtering and content-based filtering (aka side information).
     """
 
-    def __init__(self, latent_dim_cf=100, latent_dim_hybrid=100, n_epochs=10):
+    def __init__(self, latent_dim_cf=100, latent_dim_hybrid=100, n_epochs=10, steps_per_epoch=200):
         self.__n_epochs = n_epochs
         self.__latent_dim_cf = latent_dim_cf
         self.__latent_dim_hybrid = latent_dim_hybrid
+        self.__steps_per_epoch = steps_per_epoch
 
     def fit_dataset(self, dataset):
         np.random.seed(42)
@@ -207,9 +209,11 @@ class HybridRecommenderModel(object):
             latent_dim_cf=self.__latent_dim_cf,
             latent_dim_hybrid=self.__latent_dim_hybrid)
 
+        print(model.summary())
+
         for epoch in range(self.__n_epochs):
 
-            print('Epoch %s' % epoch)
+            print('*** Epoch (outer loop) %s' % epoch)
 
             model.fit_generator(
                 dataset.triplet_batches(
@@ -218,7 +222,7 @@ class HybridRecommenderModel(object):
                     include_item_side_info=True,
                 ),
                 epochs=1,
-                steps_per_epoch=200
+                steps_per_epoch=self.__steps_per_epoch
             )
 
             eval_out = model.predict_on_batch(test_batch_x)
